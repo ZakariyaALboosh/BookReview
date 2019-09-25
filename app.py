@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 
 
-os.environ["DATABASE_URL"] = "postgres://hcltwivjzhqgxy:458fc2856e29de6a0e1690166b7014ab620cd1291c8d6de457c6412569106977@ec2-46-137-113-157.eu-west-1.compute.amazonaws.com:5432/d66c21bt7mpp2r"
+os.environ["DATABASE_URL"] ="postgres://hcltwivjzhqgxy:458fc2856e29de6a0e1690166b7014ab620cd1291c8d6de457c6412569106977@ec2-46-137-113-157.eu-west-1.compute.amazonaws.com:5432/d66c21bt7mpp2r"
 DATABASE_URL = os.environ["DATABASE_URL"]
 conn = psycopg2.connect(DATABASE_URL, sslmode='require')
 
@@ -60,16 +60,16 @@ def login():
 
         # Query database for username
         rows = db.execute("SELECT * FROM users WHERE username = :username",
-                         {"username": request.form.get("username")} )
-        check = [dict(zip(row.keys(), row)) for row in rows]
-
+                         {"username": request.form.get("username")} ).fetchone()
+        
+        
         # Ensure username exists and password is correct
-        if len(check) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
+        if  not rows or not check_password_hash(rows[2], request.form.get("password")):
             return apology("wrong user or pass ", 403)
 
         # Remember which user has logged in
-        session["user_id"] = check[0]["id"]
-        session["username"] = check[0]["username"]
+        session["user_id"] = rows[0]
+        session["username"] = rows[1]
 
         # Redirect user to home page
         return redirect("/")
@@ -96,6 +96,7 @@ def logout():
 def register():
     """Register user"""
     if request.method == "POST":
+       
         username = request.form.get("username")
         password = request.form.get("password")
         confirm = request.form.get("confirmation")
@@ -104,21 +105,23 @@ def register():
         if password != confirm:
             return apology("password doesn't match")
         passhash = generate_password_hash(password)
-        query =  db.execute("SELECT username from users WHERE username = :userin", {"userin" : username})
-        check = [dict(zip(row.keys(), row)) for row in query]
+        query =  db.execute("SELECT username from users WHERE username = :userin", {"userin" : username}).fetchall()
+        
 
-        if not check:
+        if not query:
             result = db.execute("INSERT INTO users(username,hash) VALUES(:username, :phash)", {"username" : username , "phash" :passhash})
             if not result:
                 return apology("database error")
-            new = db.execute("SELECT * FROM users WHERE username = :username", {"username":username})
-            check = [dict(zip(row.keys(), row)) for row in new]
-            session["user_id"] = check[0]["id"]
-            session["username"] = check[0]["username"]
-
+            new = db.execute("SELECT * FROM users WHERE username = :username", {"username":username}).fetchone()
+            print(new)
+            session["user_id"] = new[0]
+            session["username"] = new[1]
+            db.commit()
             return redirect("/")
+           
         else:
             return apology("username taken", 400)
+            db.commit()
     return render_template("register.html")
 
 
