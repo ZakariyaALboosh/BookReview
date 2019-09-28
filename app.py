@@ -1,5 +1,6 @@
 import os
 import requests
+import urllib
 from flask import Flask, session, render_template, redirect, request
 from flask_session import Session
 from sqlalchemy import create_engine
@@ -36,7 +37,67 @@ db = scoped_session(sessionmaker(bind=engine))
 @app.route("/")
 @login_required
 def index():
-    return "Project 1: TODO"
+    return render_template("index.html")
+
+
+
+
+
+@app.route("/search", methods=["GET"])
+@login_required
+def search():
+    """ Get books results """
+
+    # Check book id was provided
+    if not request.args.get("book"):
+        return render_template("error.html", message="you must provide a book.")
+
+    # Take input and add a wildcard
+    query = "%" + request.args.get("book") + "%"
+
+    # Capitalize all words of input for search
+    # https://docs.python.org/3.7/library/stdtypes.html?highlight=title#str.title
+    query = query.title()
+    
+    rows = db.execute("SELECT isbn, title, author, year FROM books WHERE \
+                        isbn LIKE :query OR \
+                        title LIKE :query OR \
+                        author LIKE :query LIMIT 15",
+                        {"query": query})
+    
+    # Books not founded
+    if rows.rowcount == 0:
+        return render_template("error.html", message="we can't find books with that description.")
+    
+    # Fetch all the results
+    books = rows.fetchall()
+    return render_template("results.html", books=books)
+
+@app.route("/book/<string:isbn>", methods=["GET", "POST"])
+def book(isbn):
+    isbn = urllib.parse.unquote(isbn)
+        #fnaj.lkf
+    query = isbn   
+    rows = db.execute("SELECT isbn, title, author, year FROM books WHERE isbn = :query ",
+                        {"query": query})
+    book = rows.fetchone()
+    print(book)
+    reviews= db.execute("SELECT * FROM reviews WHERE isbn = :query ",
+    {"query": query})
+
+    print(reviews)
+    return render_template("book.html", book = book, reviews = reviews )  
+
+@app.route("/submitrev", methods=["POST"])
+def submitrev():
+    isbn = request.form.get("isbn")
+    rating =  request.form.get("rating")
+    content = request.form.get("content")
+    username = session["username"]
+    db.execute("INSERT INTO reviews (username,content,rating,isbn) VALUES (:username, :content, :rating, :isbn);", {"username": username , "content" : content, "rating" : rating, "isbn" : isbn})
+    db.commit()
+    url = "/book/" + isbn
+    return redirect(url)
 
 
 
