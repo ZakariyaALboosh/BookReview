@@ -1,6 +1,8 @@
 import os
 import requests
 import urllib
+import json
+from flask import jsonify
 from flask import Flask, session, render_template, redirect, request
 from flask_session import Session
 from sqlalchemy import create_engine
@@ -77,16 +79,21 @@ def search():
 def book(isbn):
     isbn = urllib.parse.unquote(isbn)
         #fnaj.lkf
+    res = requests.get("https://www.goodreads.com/book/review_counts.json", params={"key": "5VS6LlAyvuYBQLUUzT4RFA", "isbns": isbn})
+    print(res.json())
+    data= res.json()
+    revcount = data['books'][0]['ratings_count']
+    revavg = data['books'][0]['average_rating']
     query = isbn   
     rows = db.execute("SELECT isbn, title, author, year FROM books WHERE isbn = :query ",
                         {"query": query})
     book = rows.fetchone()
-    print(book)
+    
     reviews= db.execute("SELECT * FROM reviews WHERE isbn = :query ",
     {"query": query})
 
-    print(reviews)
-    return render_template("book.html", book = book, reviews = reviews )  
+
+    return render_template("book.html", book = book, reviews = reviews ,ratings = revcount , avgrating =  revavg)  
 
 @app.route("/submitrev", methods=["POST"])
 def submitrev():
@@ -99,8 +106,31 @@ def submitrev():
     url = "/book/" + isbn
     return redirect(url)
 
-
-
+@app.route("/api/<string:isbn>", methods = ["GET"])
+def getjson(isbn):
+    isbn = urllib.parse.unquote(isbn)
+    rows = db.execute("SELECT isbn, title, author, year FROM books WHERE isbn = :query ",
+                      {"query": isbn})
+    book = rows.fetchone()
+    print(book)
+    title = book['title']
+    author= book['author']
+    year = book['year']
+    number = book['isbn']
+    rowsb = db.execute("SELECT COUNT(*) FROM reviews WHERE isbn = :isbn" , {"isbn": isbn})
+    countt = rowsb.fetchone()
+    rowsc = db.execute("SELECT AVG(rating) FROM reviews WHERE isbn = :isbn" , {"isbn": isbn})
+    counttt = rowsc.fetchone()
+    averagescore = float(counttt[0])
+    response  = {
+        "title": title ,
+        "author": author ,
+        "year": year  ,
+        "isbn": number ,
+        "review_count": countt[0] ,
+        "average_score": averagescore    
+        }
+    return jsonify(response)
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Log user in"""
